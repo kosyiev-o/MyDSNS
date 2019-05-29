@@ -1,0 +1,5 @@
+var situation = {"name":"Layer","type":"FeatureCollection",
+"crs": {"type": "name","properties": {"name": "EPSG:4326"}},
+"features":[
+{"type":"Feature","geometry":{"type":"Point","coordinates":[13.9264527063343,56.2888907165595]},"properties":{"SIDC":"SFGPU------E***","name":"1.C2 komp","fullname":"1.C2 komp/FTS/INSS","command":"FTS"}}
+]}
