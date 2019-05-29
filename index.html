@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>DSNS Solutions</title>
+  <style type="text/css">
+    html,
+    body,
+    .mymap {
+      padding: 0;
+      margin: 0;
+      height: 100%;
+      width: 100%;
+    }
+  </style>
+  <!--Bootstrap-->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+  <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+  <!--Leaflet-->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"></script>
+  <!--  Military symbols-->
+  <script src="node_modules/milsymbol/dist/milsymbol.js"></script>
+  <script src="node_modules/leaflet-search/src/leaflet-search.js"></script>
+  <link rel="stylesheet" href="node_modules/leaflet-search/src/leaflet-search.css">
+
+  <!--Esri search engine-->
+  <script src="https://unpkg.com/esri-leaflet@2.2.4/dist/esri-leaflet.js"
+          integrity="sha512-tyPum7h2h36X52O2gz+Pe8z/3l+Y9S1yEUscbVs5r5aEY5dFmP1WWRY/WLLElnFHa+k1JBQZSCDGwEAnm2IxAQ=="
+          crossorigin=""></script>
+  <link rel="stylesheet" href="https://unpkg.com/esri-leaflet-geocoder@2.2.14/dist/esri-leaflet-geocoder.css"
+        integrity="sha512-v5YmWLm8KqAAmg5808pETiccEohtt8rPVMGQ1jA6jqkWVydV5Cuz3nJ9fQ7ittSxvuqsvI9RSGfVoKPaAJZ/AQ=="
+        crossorigin="">
+  <script src="https://unpkg.com/esri-leaflet-geocoder@2.2.14/dist/esri-leaflet-geocoder.js"
+          integrity="sha512-uK5jVwR81KVTGe8KpJa1QIN4n60TsSV8+DPbL5wWlYQvb0/nYNgSOg9dZG6ViQhwx/gaMszuWllTemL+K+IXjg=="
+          crossorigin=""></script>
+
+  <script src="situation.json"></script>
+</head>
+
+<body onload="init()">
+<script>
+  var friends = L.layerGroup();
+  var enemies = L.layerGroup();
+  function init() {
+    var osmAttr = '&copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>';
+    var OSM = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: osmAttr }),
+            latlng = L.latLng(59, 16);
+    var OpenTopoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17,
+      attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+    });
+    var Esri_WorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    });
+    const baseMaps = {
+      // 'Transpost': Thunderforest_Transport,
+      'World': Esri_WorldImagery,
+      'Topographic': OpenTopoMap,
+      'OSM': OSM,
+    };
+    const overlayMaps = {
+      'friends': friends,
+      'enemies': enemies,
+    };
+    window.map = L.map('map', { center: latlng, zoom: 5, layers: [OpenTopoMap, Esri_WorldImagery, OSM] });
+    window.map.on('dblclick', onMapClick);
+    window.map.doubleClickZoom.disable();
+    var iconSize = {
+      "Team/Crew": 5,
+      "Squad": 10,
+      "Section": 15,
+      "Platoon/detachment": 20,
+      "Company/battery/troop": 25,
+      "Battalion/squadron": 30,
+      "Regiment/group": 35,
+      "Brigade": 40,
+      "Division": 45,
+      "Corps/MEF": 50,
+      "Army": 55,
+      "Army Group/front": 60,
+      "Region/Theater": 65,
+      "Command": 70
+    };
+
+    L.geoJson(situation, {
+      pointToLayer: function (feature, latlng) {
+
+        var mysymbol = new ms.Symbol(
+                feature.properties.SIDC, {
+                  uniqueDesignation: feature.properties.name
+                });
+        // Now that we have a symbol we can ask for the echelon and set the symbol size
+        mysymbol = mysymbol.setOptions({ size: iconSize[mysymbol.getMetadata().echelon] });
+
+        var myicon = L.icon({
+          iconUrl: mysymbol.toDataURL(),
+          iconAnchor: [mysymbol.getAnchor().x, mysymbol.getAnchor().y],
+        });
+
+        return L.marker(latlng, { icon: myicon, draggable: true });
+      }
+    }).addTo(map);
+
+    L.control.layers(baseMaps, overlayMaps).addTo(map);
+
+    //Search layer
+    searchLayer = new L.esri.Geocoding.Geosearch().addTo(map);
+    var results = new L.LayerGroup().addTo(map);
+    searchLayer.on('results', function(data){
+      results.clearLayers();
+      for (var i = data.results.length - 1; i >= 0; i--) {
+        results.addLayer(L.marker(data.results[i].latlng));
+      }
+    });
+  }
+
+  //Get lat, lon where user was clicked
+  let clickedPos;
+  onMapClick = e => {
+    $('#createModal').modal('toggle');
+    clickedPos = e.latlng;
+  };
+
+  var markersList = [];
+  var counter = 0;
+  //method for add marker into map. Require 3 arguments. SIDC looks like "EAFP--------"
+  addMarker = (SIDC, name, latlng) => {
+    let mysymbol = new ms.Symbol(
+            SIDC, {
+              uniqueDesignation: name
+            });
+    // Now that we have a symbol we can ask for the echelon and set the symbol size
+    mysymbol = mysymbol.setOptions({ size: 25 });
+
+    const myicon = L.icon({
+      iconUrl: mysymbol.toDataURL(),
+      iconAnchor: [mysymbol.getAnchor().x, mysymbol.getAnchor().y],
+    });
+
+    const newMarker = L.marker(latlng, { icon: myicon, draggable: true });
+    const popupContent = '<button>Edit Marker</button></br><button onclick="deleteModal()" data-toggle="modal" data-target="#deleteModal">Remove Marker</button>';
+    newMarker.bindPopup(popupContent, { closeButton: false });
+
+    if (SIDC.substr(3, 2) <= 40) {
+      friends.addLayer(newMarker);
+    } else {
+      enemies.addLayer(newMarker);
+    }
+
+    markersList.push(newMarker);
+    counter += 1;
+    return drawMarkers();
+  };
+
+  symbolSet = {
+    stdIdentity1: {
+      '100': 'Reality',
+      '101': 'Exercise',
+      '102': 'Simulation',
+    },
+    stdIdentity2: {
+      '00': 'Pending',
+      '10': 'Unknown',
+      '20': 'Assumed friend',
+      '30': 'Friend',
+      '40': 'Neutral',
+      '50': 'Suspect/Joker',
+      '60': 'Hostile/Faker',
+    },
+    symbol: {
+      '01': 'Air',
+      '02': 'Air missile',
+      '05': 'Space',
+      '10': 'Land unit',
+      '11': 'Land civilian unit/Organization',
+      '15': 'Equipment',
+      '20': 'Land installations',
+      '25': 'Control meassure',
+      '27': 'Dismounted individual',
+      '30': 'Sea surface',
+    },
+    status: {
+      '00': 'Present',
+      '10': 'Planned/Suspect',
+      '20': 'Present/Fully capable',
+      '30': 'Present/Damaged',
+      '40': 'Present/Destroyed',
+      '50': 'Present/Full to capacity'
+    },
+  };
+
+  var SIDC, stdIdentity1, stdIdentity2, symbol, status = '000';
+
+  handleIdentity1 = value => {
+    stdIdentity1 = value;
+    const stdIdentity1Dropdown = document.getElementById('stdIdentity1-dropdown');
+    stdIdentity1Dropdown.innerText = symbolSet['stdIdentity1'][stdIdentity1];
+    imageReload();
+  };
+
+  handleIdentity2 = value => {
+    stdIdentity2 = value;
+    const stdIdentity2Dropdown = document.getElementById('stdIdentity2-dropdown');
+    stdIdentity2Dropdown.innerText = symbolSet['stdIdentity2'][stdIdentity2];
+    imageReload();
+  };
+
+  handleStatus = value => {
+    status = value;
+    const statusDropdown = document.getElementById('status-dropdown');
+    statusDropdown.innerText = symbolSet['status'][status];
+    imageReload();
+  };
+
+  handleSymbol = value => {
+    symbol = value;
+    const symbolDropdown = document.getElementById('symbol-dropdown');
+    symbolDropdown.innerText = symbolSet['symbol'][symbol];
+    imageReload();
+  };
+
+  submitFormCreate = () => {
+    const name = document.getElementById('name').value;
+    $('#createModal').modal('toggle');
+    addMarker(SIDC, name, clickedPos);
+  };
+
+  imageReload = () => {
+    const imgPreview = document.getElementById('preview-img');
+    SIDC = (stdIdentity1 || '000') + (stdIdentity2 || '000') + (symbol || '000') + status;
+    renderedContent = new ms.Symbol(SIDC, { size: 50}).asSVG();
+    imgPreview.innerHTML = renderedContent + `<div>Code ${SIDC}</div>`;
+  };
+
+  deleteModal = () => {
+    $('#deleteModal').modal('toggle');
+  };
+
+  removeMarker = () => {
+    map.removeLayer(markersList[counter-1]);
+    markersList.pop();
+    counter -= 1;
+    $('#deleteModal').modal('toggle');
+  };
+
+  drawMarkers = () => {
+    markersList.forEach(marker => {
+      marker.addTo(map);
+    })
+  };
+</script>
+
+<!--  <div id="map" class="mymap" data-toggle="modal" data-target="#createModal"></div>-->
+<div id="map" class="mymap"></div>
+
+<!-- Modal -->
+<div class="modal fade" id="createModal" role="dialog">
+  <div class="modal-dialog">
+
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Create marker</h4>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="preview-img" class="text-center"></div>
+        <form>
+          <div class="form-group">
+            <label for="name">Name</label>
+            <div>
+              <input type="text" class="form-control" id="name" aria-describedby="basic-addon3">
+            </div>
+          </div>
+          <!--            stdIdentity1-->
+          <div class="dropdown mb-3 text-center">
+            <button class="btn btn-secondary dropdown-toggle w-75" type="button" id="stdIdentity1-dropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Standard identity 1
+            </button>
+            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+              <a class="dropdown-item" href="#" onclick="handleIdentity1('100')">Reality</a>
+              <a class="dropdown-item" href="#" onclick="handleIdentity1('101')">Exercise</a>
+              <a class="dropdown-item" href="#" onclick="handleIdentity1('102')">Simulation</a>
+            </div>
+          </div>
+          <div class="dropdown mb-3 text-center">
+            <button class="btn btn-secondary dropdown-toggle w-75" type="button" id="stdIdentity2-dropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Standard identity 2
+            </button>
+            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+              <a class="dropdown-item" href="#" onclick="handleIdentity2('00')">Pending</a>
+              <a class="dropdown-item" href="#" onclick="handleIdentity2('10')">Unknown</a>
+              <a class="dropdown-item" href="#" onclick="handleIdentity2('20')">Assumed friend</a>
+              <a class="dropdown-item" href="#" onclick="handleIdentity2('30')">Friend</a>
+              <a class="dropdown-item" href="#" onclick="handleIdentity2('40')">Neutral</a>
+              <a class="dropdown-item" href="#" onclick="handleIdentity2('50')">Suspect/Joker</a>
+              <a class="dropdown-item" href="#" onclick="handleIdentity2('60')">Hostile/Faker</a>
+            </div>
+          </div>
+          <div class="dropdown mb-3 text-center">
+            <button class="btn btn-secondary dropdown-toggle w-75" type="button" id="symbol-dropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Symbol set
+            </button>
+            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+              <a class="dropdown-item" href="#" onclick="handleSymbol('01')">Air</a>
+              <a class="dropdown-item" href="#" onclick="handleSymbol('02')">Air missile</a>
+              <a class="dropdown-item" href="#" onclick="handleSymbol('05')">Space</a>
+              <a class="dropdown-item" href="#" onclick="handleSymbol('10')">Land unit</a>
+              <a class="dropdown-item" href="#" onclick="handleSymbol('11')">Land civilian unit/Organization</a>
+              <a class="dropdown-item" href="#" onclick="handleSymbol('15')">Equipment</a>
+              <a class="dropdown-item" href="#" onclick="handleSymbol('20')">Land installations</a>
+              <a class="dropdown-item" href="#" onclick="handleSymbol('25')">Control meassure</a>
+              <a class="dropdown-item" href="#" onclick="handleSymbol('27')">Dismounted individual</a>
+              <a class="dropdown-item" href="#" onclick="handleSymbol('30')">Sea surface</a>
+            </div>
+          </div>
+          <div class="dropdown mb-3 text-center">
+            <button class="btn btn-secondary dropdown-toggle w-75" type="button" id="status-dropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              Status
+            </button>
+            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+              <a class="dropdown-item" href="#" onclick="handleStatus('00')">Present</a>
+              <a class="dropdown-item" href="#" onclick="handleStatus('10')">Planned/Suspect</a>
+              <a class="dropdown-item" href="#" onclick="handleStatus('20')">Present/Fully capable</a>
+              <a class="dropdown-item" href="#" onclick="handleStatus('30')">Present/Damaged</a>
+              <a class="dropdown-item" href="#" onclick="handleStatus('40')">Present/Destroyed</a>
+              <a class="dropdown-item" href="#" onclick="handleStatus('50')">Present/Full to capacity</a>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary mr-5" onclick="submitFormCreate()">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!--Delete modal-->
+<div class="modal fade" id="deleteModal" role="dialog">
+  <div class="modal-dialog d-flex align-items-center h-100 my-0">
+    <div class="modal-content">
+      <div class="modal-body">
+        <h3>Remove this icon from map?</h3>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <a class="btn btn-danger marker-delete-btn" onclick="removeMarker()">Delete</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+
+</html>
+
